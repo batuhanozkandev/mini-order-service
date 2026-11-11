@@ -13,6 +13,6 @@ export const dataSource = new DataSource({
   // Explicit class list (not a glob) so it works both from dist/ and from src/ under Vitest.
   migrations: [Init1794385148000],
   synchronize: false,
-  // Makes TypeORM use gen_random_uuid() (same as the migration) instead of its default uuid-ossp extension.
-  uuidExtension: 'pgcrypto',
+  // The migration owns the schema (ids default to the built-in gen_random_uuid()), so TypeORM must not create extensions on boot.
+  installExtensions: false,
 });

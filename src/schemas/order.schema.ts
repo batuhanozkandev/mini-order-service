@@ -1,4 +1,5 @@
 import { errorSchema } from './error.schema';
+import { uuidSchema } from './uuid.schema';
 
 const paymentSchema = {
   type: 'object',
@@ -28,8 +29,9 @@ export const createOrderSchema = {
   body: {
     type: 'object',
     properties: {
-      productId: { type: 'string', format: 'uuid' },
-      quantity: { type: 'integer', minimum: 1 },
+      productId: uuidSchema,
+      // Max price (99,999,999.99) x 100 still fits payments.amount numeric(12,2).
+      quantity: { type: 'integer', minimum: 1, maximum: 100 },
     },
     required: ['productId', 'quantity'],
     additionalProperties: false,
