@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import { config } from './config';
 import { loggerOptions } from './logger';
 import { buildApp } from './app';
