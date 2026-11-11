@@ -6,6 +6,8 @@ Stack: Node.js 22, Fastify 5, TypeORM + Postgres 16, Redis (ioredis), OpenTeleme
 
 ## How to run
 
+Requirements: Docker, and Node.js 22+ (Node is only needed for the tests).
+
 ```bash
 docker compose up --build   # starts Postgres, Redis, Jaeger, runs migrations + seed, then starts the app on :3000
 npm ci                      # in another terminal, install dependencies for the tests
@@ -42,7 +44,7 @@ Each test creates its own product and removes it at the end, so the tests can be
 
 **Why a pessimistic lock inside a transaction.** Two orders can read "stock = 1" at the same time and both decide to sell it. `POST /orders` therefore opens a transaction and reads the product with `SELECT ... FOR UPDATE`. The second order waits for the first to commit, then sees the new stock and gets a 409. The stock change, the order and the payment commit or roll back together. A `CHECK (stock >= 0)` constraint in the database is the safety net: even a bug in the code cannot make stock negative. The concurrency test proves this with 20 parallel requests.
 
-**Why cache-aside, delete-on-write and TTL jitter.** `GET /products/:id` looks in Redis first (key `product:{id}`), and on a miss reads Postgres and stores the result. On `PATCH` (and after an order, which changes stock) the code commits to Postgres first and then deletes the key, instead of updating it, so there is no second copy of the logic that can drift. If the delete fails, the error is logged and not turned into a 5xx: the data is already committed, and a retry could create a second order. The TTL then limits how stale the entry can get. The TTL is one hour plus a random 0 to 300 seconds. Without the random part, products cached at the same moment would all expire together and hit the database together. If Redis is down, reads fall back to Postgres, so the service is slower but keeps working.
+**Why cache-aside, delete-on-write and TTL jitter.** `GET /products/:id` looks in Redis first (key `product:{id}`), and on a miss reads Postgres and stores the result. On `PATCH` (and after an order, which changes stock) the code commits to Postgres first and then deletes the key, instead of updating it. Deleting is safe under concurrent writes: if two writers each SET the new value into the cache, they can finish in the wrong order and leave an old value behind, while a delete just makes the next read load the current row. One gap remains: a read that missed just before a write can still put the old value back after the delete. The TTL bounds that case too. If the delete fails, the error is logged and not turned into a 5xx: the data is already committed, and a retry could create a second order. The TTL then limits how stale the entry can get. The TTL is one hour plus a random 0 to 300 seconds. Without the random part, products cached at the same moment would all expire together and hit the database together. If Redis is down, reads fall back to Postgres, so the service is slower but keeps working.
 
 **Liveness vs readiness.** `/health/live` only says the process is running and answers without touching anything else; if it fails, the container should be restarted. `/health/ready` pings Postgres and Redis, each with a 1 second timeout, and returns 503 if one is down; if it fails, traffic should be held back, but restarting the process would not help. Keeping them separate avoids restart loops when only a dependency is down.
 
