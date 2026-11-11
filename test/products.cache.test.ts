@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app';
@@ -11,6 +10,8 @@ let cacheKey: string;
 
 beforeAll(async () => {
   await dataSource.initialize();
+  // The Redis client has no offline queue, so commands sent before the connection is ready would fail.
+  if (redis.status !== 'ready') await new Promise((resolve) => redis.once('ready', resolve));
   app = buildApp({ logger: false });
   const rows = await dataSource.query(
     `INSERT INTO products (name, price, stock) VALUES ('Cache test product', 10.00, 50) RETURNING id`,

@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app';
@@ -10,6 +9,8 @@ let productId: string;
 
 beforeAll(async () => {
   await dataSource.initialize();
+  // The Redis client has no offline queue, so commands sent before the connection is ready would fail.
+  if (redis.status !== 'ready') await new Promise((resolve) => redis.once('ready', resolve));
   app = buildApp({ logger: false });
   // The test creates its own product, so it never touches the seeded ones.
   const rows = await dataSource.query(
